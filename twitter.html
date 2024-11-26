@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tweet with Media</title>
+    <style>
+        /* Basic Reset */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Body Style */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* Main Container */
+        .container {
+            background-color: #fff;
+            padding: 30px 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        /* Heading */
+        h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        /* File Input & Text Input */
+        input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            outline: none;
+            transition: border 0.3s;
+        }
+
+        input[type="file"]:hover, input[type="text"]:hover {
+            border-color: #007bff;
+        }
+
+        input[type="text"] {
+            height: 40px;
+        }
+
+        /* Submit Button */
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 10px 0;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Alert Message */
+        .alert {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .alert.success {
+            background-color: #28a745;
+        }
+
+        .alert.error {
+            background-color: #28a745;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Upload Image and Tweet it</h1>
+        
+        <!-- Form to upload an image -->
+        <form id="tweetForm" enctype="multipart/form-data">
+            <input type="file" name="media" id="media" required><br>
+            <input type="text" name="tweet_text" id="tweet_text" placeholder="Enter tweet text" required><br>
+            <button type="submit">Tweet</button>
+            <div class="spinner" id="spinner"></div>
+        </form>
+
+        <div id="alert" class="alert" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Handle form submission
+        document.getElementById("tweetForm").addEventListener("submit", async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData();
+            const mediaFile = document.getElementById("media").files[0];
+            const tweetText = document.getElementById("tweet_text").value;
+            formData.append("media", mediaFile);
+            formData.append("tweet_text", tweetText);
+
+            // Show the spinner while uploading
+            document.getElementById("spinner").style.display = "inline-block";
+            document.getElementById("alert").style.display = "none";
+
+            try {
+                const response = await fetch("https://us-central1-payday-social-media-manager.cloudfunctions.net/tweet_with_media", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                const result = await response.json();
+                // Hide the spinner
+                document.getElementById("spinner").style.display = "none";
+
+                if (response.ok) {
+                    showAlert("Tweet posted successfully!", "success");
+                } else {
+                    showAlert(`Error: ${result.message}`, "error");
+                }
+            } catch (error) {
+                // Hide the spinner and show error alert
+                document.getElementById("spinner").style.display = "none";
+                showAlert("Check now", "error");
+            }
+        });
+
+        // Show alert message
+        function showAlert(message, type) {
+            const alertBox = document.getElementById("alert");
+            alertBox.textContent = message;
+            alertBox.className = `alert ${type}`;
+            alertBox.style.display = "block";
+        }
+    </script>
+
+</body>
+</html>
