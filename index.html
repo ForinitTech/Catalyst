@@ -1,246 +1,98 @@
-<!DOCTYPE html>
-<html lang="en">
+import os
+import tweepy
+from requests_oauthlib import OAuth1Session
+from dotenv import load_dotenv
+from google.cloud import storage
+import tempfile
+import json
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Post Media to Social Media</title>
-    <style>
-        /* Basic Reset */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+# Load environment variables from .env
+load_dotenv()
 
-        /* Body Style */
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f4f7f6;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
+# API credentials from environment variables
+api_key = os.getenv("API_KEY")
+api_key_secret = os.getenv("API_KEY_SECRET")
+access_token = os.getenv("ACCESS_TOKEN")
+access_token_secret = os.getenv("ACCESS_TOKEN_SECRET")
+bearer_token = os.getenv("BEARER_TOKEN")
 
-        /* Main Container */
-        .container {
-            background-color: #fff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            width: 100%;
-            max-width: 500px;
-        }
+# Authentication for Tweepy
+client = tweepy.Client(
+    bearer_token=bearer_token,
+    consumer_key=api_key,
+    consumer_secret=api_key_secret,
+    access_token=access_token,
+    access_token_secret=access_token_secret
+)
 
-        h1 {
-            font-size: 26px;
-            color: #333;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
+# Media upload function
+def upload_media(media_path):
+    print(f"Uploading media from path: {media_path}")
+    url = "https://upload.twitter.com/1.1/media/upload.json"
+    oauth = OAuth1Session(api_key, api_key_secret, access_token, access_token_secret)
+    with open(media_path, 'rb') as media_file:
+        files = {'media': media_file}
+        response = oauth.post(url, files=files)
 
-        select,
-        input[type="file"],
-        input[type="text"] {
-            width: 100%;
-            padding: 14px;
-            margin: 15px 0;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            font-size: 16px;
-            outline: none;
-            transition: border-color 0.3s ease;
-        }
+        # Debugging the response from Twitter API
+        print(f"Response status code: {response.status_code}")
+        print(f"Response content: {response.text}")
 
-        select:hover,
-        input[type="file"]:hover,
-        input[type="text"]:hover {
-            border-color: #007bff;
-        }
+        if response.status_code == 200:
+            media_id = response.json()['media_id']
+            print(f"Media uploaded successfully. Media ID: {media_id}")
+            return media_id
+        return None
 
-        button {
-            width: 100%;
-            padding: 14px;
-            background-color: #007bff;
-            color: white;
-            font-size: 18px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
+# Cloud Function
+def tweet_with_media(request):
+    request_json = request.get_json(silent=True)
+    request_args = request.args
 
-        button:hover {
-            background-color: #0056b3;
-        }
+    # Get data from the request body (if provided)
+    tweet_text = request_json.get('tweet_text') if request_json else request_args.get('tweet_text')
+    media = request.files['media'] if 'media' in request.files else None
 
-        button:disabled {
-            background-color: #aab8c2;
-            cursor: not-allowed;
-        }
+    # Debugging: Check if the files and form data are correctly received
+    print(f"Received POST request at /tweet route")
+    print(f"Tweet text: {tweet_text}")
+    print(f"Media file name: {media.filename}")
 
-        .spinner {
-            display: inline-block;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid #007bff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px 0;
-        }
+    # Save the file temporarily and upload it
+    if media:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            media_path = tmp_file.name
+            media.save(media_path)
 
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
+            # Upload the media to Twitter
+            media_id = upload_media(media_path)
 
-            100% {
-                transform: rotate(360deg);
-            }
-        }
+            if media_id:
+                # Posting the tweet with the media ID
+                response = client.create_tweet(
+                    text=tweet_text,
+                    media_ids=[media_id]
+                )
 
-        .success,
-        .error {
-            margin-top: 20px;
-            padding: 15px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            text-align: center;
-            display: none;
-        }
-
-        .success {
-            background-color: #28a745;
-            color: white;
-        }
-
-        .error {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 600px) {
-            .container {
-                padding: 20px;
-                max-width: 90%;
-            }
-
-            h1 {
-                font-size: 22px;
-            }
-
-            select,
-            input[type="file"],
-            input[type="text"],
-            button {
-                font-size: 14px;
-            }
-
-            .spinner {
-                width: 30px;
-                height: 30px;
-            }
-        }
-    </style>
-</head>
-
-<body>
-
-    <div class="container">
-        <h1>Post Media to Social Media</h1>
-        <form id="socialMediaForm" onsubmit="postMedia(event)">
-            <select id="platform" required>
-                <option value="" disabled selected>Select where to post</option>
-                <option value="instagram">Instagram</option>
-                <option value="twitter">Twitter</option>
-                <option value="both">Both Instagram & Twitter</option>
-            </select>
-            <input type="text" name="caption" id="caption" placeholder="Enter caption or tweet text" required>
-            <input type="file" name="media" id="media" accept="image/*,video/*" required>
-            <button type="submit" id="submitBtn">Post</button>
-            <div class="spinner" id="spinner" style="display: none;"></div>
-        </form>
-        <div id="successMessage" class="success">Success! Your media has been posted!</div>
-        <div id="errorMessage" class="error">Error! Something went wrong.</div>
-    </div>
-
-    <script>
-        async function postMedia(event) {
-            event.preventDefault();
-            const submitBtn = document.getElementById('submitBtn');
-            const spinner = document.getElementById('spinner');
-            const successMessage = document.getElementById('successMessage');
-            const errorMessage = document.getElementById('errorMessage');
-
-            submitBtn.disabled = true;
-            spinner.style.display = 'inline-block';
-            successMessage.style.display = 'none';
-            errorMessage.style.display = 'none';
-
-            const platform = document.getElementById('platform').value;
-            const caption = document.getElementById('caption').value;
-            const mediaFile = document.getElementById('media').files[0];
-
-            const formData = new FormData();
-            formData.append('caption', caption);
-            formData.append('media', mediaFile);
-
-            try {
-                let instagramResponse, twitterResponse;
-
-                if (platform === 'instagram' || platform === 'both') {
-                    instagramResponse = await fetch('https://us-central1-payday-social-media-manager.cloudfunctions.net/post_to_instagram_via_api', {
-                        method: 'POST',
-                        body: formData,
-                        mode: 'cors',
-                    });
-
-                    // Log Instagram Response for debugging
-                    console.log('Instagram Response:', instagramResponse);
-
-                    if (!instagramResponse.ok) {
-                        throw new Error('Instagram post failed');
-                    }
+                # Return a success response with CORS headers
+                return json.dumps({
+                    "message": "Tweet posted successfully!",
+                    "tweet": response.data
+                }), 200, {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
+                }
+            else:
+                return json.dumps({"error": "Failed to upload media"}), 400, {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type'
                 }
 
-                if (platform === 'twitter' || platform === 'both') {
-                    twitterResponse = await fetch('https://us-central1-payday-social-media-manager.cloudfunctions.net/tweet_with_media', {
-                        method: 'POST',
-                        body: formData,
-                        mode: 'cors',
-                    });
+    return json.dumps({"error": "No media found in request"}), 400, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+    }
 
-                    // Log Twitter Response for debugging
-                    console.log('Twitter Response:', twitterResponse);
-
-                    if (!twitterResponse.ok) {
-                        throw new Error('Twitter post failed');
-                    }
-                }
-
-                // Display success message only if both responses are successful
-                if ((platform === 'instagram' && instagramResponse.ok) ||
-                    (platform === 'twitter' && twitterResponse.ok) ||
-                    (platform === 'both' && instagramResponse.ok && twitterResponse.ok)) {
-                    successMessage.style.display = 'block';
-                } else {
-                    throw new Error('Something went wrong during posting');
-                }
-            } catch (error) {
-                console.error('Error posting media:', error);
-                errorMessage.style.display = 'block';
-            } finally {
-                spinner.style.display = 'none';
-                submitBtn.disabled = false;
-            }
-        }
-    </script>
-
-</body>
-
-</html>
