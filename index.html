@@ -176,53 +176,51 @@
             const spinner = document.getElementById('spinner');
             const successMessage = document.getElementById('successMessage');
             const errorMessage = document.getElementById('errorMessage');
-
+        
             submitBtn.disabled = true;
             spinner.style.display = 'inline-block';
             successMessage.style.display = 'none';
             errorMessage.style.display = 'none';
-
+        
             const platform = document.getElementById('platform').value;
             const caption = document.getElementById('caption').value;
             const mediaFile = document.getElementById('media').files[0];
-
+        
             const formData = new FormData();
             formData.append('caption', caption);
             formData.append('media', mediaFile);
-
+        
             try {
                 let instagramResponse, twitterResponse;
-
+        
                 if (platform === 'instagram' || platform === 'both') {
                     instagramResponse = await fetch('https://us-central1-payday-social-media-manager.cloudfunctions.net/post_to_instagram_via_api', {
                         method: 'POST',
                         body: formData,
                         mode: 'cors',
                     });
-
-                    // Log Instagram Response for debugging
-                    console.log('Instagram Response:', instagramResponse);
-
-                    if (!instagramResponse.ok) {
-                        throw new Error('Instagram post failed');
+        
+                    const instagramData = await instagramResponse.json();
+        
+                    if (!instagramResponse.ok || !instagramData.success) {
+                        throw new Error(instagramData.message || 'Instagram post failed');
                     }
                 }
-
+        
                 if (platform === 'twitter' || platform === 'both') {
                     twitterResponse = await fetch('https://us-central1-payday-social-media-manager.cloudfunctions.net/tweet_with_media', {
                         method: 'POST',
                         body: formData,
                         mode: 'cors',
                     });
-
-                    // Log Twitter Response for debugging
-                    console.log('Twitter Response:', twitterResponse);
-
-                    if (!twitterResponse.ok) {
-                        throw new Error('Twitter post failed');
+        
+                    const twitterData = await twitterResponse.json();
+        
+                    if (!twitterResponse.ok || !twitterData.success) {
+                        throw new Error(twitterData.message || 'Twitter post failed');
                     }
                 }
-
+        
                 // Display success message only if both responses are successful
                 if ((platform === 'instagram' && instagramResponse.ok) ||
                     (platform === 'twitter' && twitterResponse.ok) ||
@@ -238,7 +236,7 @@
                 spinner.style.display = 'none';
                 submitBtn.disabled = false;
             }
-        }
+        }        
     </script>
 
 </body>
